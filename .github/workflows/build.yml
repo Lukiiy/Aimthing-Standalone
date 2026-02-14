@@ -1,0 +1,109 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            rust_target: aarch64-apple-darwin
+            artifact_prefix: macos-aarch64
+
+          - platform: macos-latest
+            rust_target: x86_64-apple-darwin
+            artifact_prefix: macos-x86_64
+
+          - platform: ubuntu-22.04
+            rust_target: x86_64-unknown-linux-gnu
+            artifact_prefix: linux-x86_64_and_minimal
+
+          - platform: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+            artifact_prefix: windows-x86_64
+
+    runs-on: ${{ matrix.platform }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/checkout@v6
+        with:
+          repository: Lukiiy/Aimthing
+          ref: main
+          path: src
+          fetch-depth: 1
+
+      - name: Cleanup
+        run: |
+          rm -rf src/.git src/.github || true
+          find src -type f \( -name "*.md" -o -name ".gitignore" \) -print0 | xargs -0 -r rm -f
+
+      - uses: oven-sh/setup-bun@v2.1.2
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Rust
+        uses: actions/cache@v5.0.3
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            src/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ matrix.rust_target }}-${{ hashFiles('src/src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-${{ matrix.rust_target }}-
+
+      - name: Linux dependencies
+        if: ${{ matrix.platform == 'ubuntu-22.04' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev libappindicator3-dev patchelf
+
+      - name: Build
+        working-directory: src
+        run: |
+          bun install --frozen-lockfile
+          bun tauri build --target ${{ matrix.rust_target }}
+        shell: bash
+
+      - name: Get executables
+        if: ${{ runner.os != 'Windows' }}
+        run: |
+          mkdir -p release
+
+          find ./src-tauri/target -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.dmg" -o -name "*.rpm" \) -exec cp {} release/ \; || true
+
+          if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
+            PKG_NAME=$(grep -m1 '^name = ' src-tauri/Cargo.toml | cut -d'"' -f2)
+            if [ -f "src-tauri/target/release/$PKG_NAME" ]; then
+              cp "src-tauri/target/release/$PKG_NAME" "release/${PKG_NAME}-minimal"
+            fi
+          fi
+
+          ls -lh release/ || true
+        shell: bash
+
+      - name: Get executables (windows)
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Get-ChildItem -Path src-tauri\target -Recurse -Include *.msi,*.exe | Where-Object { $_.FullName -match 'bundle' } | Copy-Item -Destination release\
+          Get-ChildItem release\ -Recurse
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact_prefix }}
+          path: release/*

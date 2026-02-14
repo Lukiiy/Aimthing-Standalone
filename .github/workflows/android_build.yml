@@ -1,0 +1,113 @@
+name: Build Android
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust_target: aarch64-linux-android
+            tauri_target: aarch64
+            artifact_prefix: android-arm64
+
+          - rust_target: armv7-linux-androideabi
+            tauri_target: armv7
+            artifact_prefix: android-armv7
+
+    env:
+      JAVA_VERSION: "17"
+      NDK_VERSION: "29.0.14206865"
+      ANDROID_API: "33"
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/checkout@v6
+        with:
+          repository: Lukiiy/Aimthing
+          ref: main
+          path: src
+          fetch-depth: 1
+
+      - name: Cleanup
+        run: |
+          rm -rf src/.git src/.github || true
+          find src -type f \( -name "*.md" -o -name ".gitignore" \) -print0 | xargs -0 -r rm -f
+
+      - uses: oven-sh/setup-bun@v2.1.2
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Rust
+        uses: actions/cache@v5.0.3
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            src/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ matrix.rust_target }}-${{ hashFiles('src/src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-${{ matrix.rust_target }}-
+
+      - name: Install Java
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-${JAVA_VERSION}-jdk
+          echo "JAVA_HOME=/usr/lib/jvm/java-${JAVA_VERSION}-openjdk-amd64" >> $GITHUB_ENV
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3.2.2
+
+      - name: Android NDK
+        run: |
+          yes | sdkmanager "ndk;${NDK_VERSION}" "platform-tools" "platforms;android-${ANDROID_API}"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> $GITHUB_ENV
+
+      - name: Verify Android signing secrets
+        run: |
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ] || [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ] || [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "Missing Android signing secrets."
+            exit 1
+          fi
+
+      - name: Android keystore
+        run: |
+          mkdir -p src/src-tauri/gen/android
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > src/src-tauri/gen/android/release.keystore
+
+          echo "KEYSTORE_PATH=$(pwd)/src/src-tauri/gen/android/release.keystore" >> $GITHUB_ENV
+          echo "KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_ALIAS=release" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: Build
+        working-directory: src
+        run: |
+          bun install --frozen-lockfile
+          bun tauri android init --ci
+          bun tauri android build --target ${{ matrix.tauri_target }}
+
+      - name: Collect APK/AAB
+        run: |
+          mkdir -p release
+          find src/src-tauri/gen/android -type f \( -name "*.apk" -o -name "*.aab" \) -print0 \
+            | xargs -0 -r -I{} cp {} release/
+          ls -lh release/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact_prefix }}
+          path: release/*
