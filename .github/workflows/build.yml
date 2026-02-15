@@ -45,15 +45,6 @@ jobs:
           rm -rf src/.git src/.github || true
           find src -type f \( -name "*.md" -o -name ".gitignore" \) -print0 | xargs -0 -r rm -f
 
-      - name: Print directory tree
-        if: runner.os != 'Windows'
-        run: |
-          if command -v tree &> /dev/null; then
-            tree -L 3
-          else
-            find . -maxdepth 3 -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'
-          fi
-
       - uses: oven-sh/setup-bun@v2.1.2
 
       - name: Rust toolchain
@@ -79,7 +70,6 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev libappindicator3-dev patchelf
 
       - name: Build
-        working-directory: src
         run: |
           bun install --frozen-lockfile
           bun tauri build --target ${{ matrix.rust_target }}
