@@ -83,10 +83,7 @@ jobs:
           find ./src-tauri/target -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.dmg" -o -name "*.rpm" \) -exec cp {} release/ \; || true
 
           if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
-            PKG_NAME=$(grep -m1 '^name = ' src-tauri/Cargo.toml | cut -d'"' -f2)
-            if [ -f "src-tauri/target/release/$PKG_NAME" ]; then
-              cp "src-tauri/target/release/$PKG_NAME" "release/${PKG_NAME}-minimal"
-            fi
+            find ./src-tauri/target -type f \( -name "aimthing" \) -exec cp {} release/aimthing-minimal \; || true
           fi
 
           ls -lh release/ || true
