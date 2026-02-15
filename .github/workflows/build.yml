@@ -39,12 +39,20 @@ jobs:
           repository: Lukiiy/Aimthing
           ref: main
           path: src
-          fetch-depth: 1
 
       - name: Cleanup
         run: |
           rm -rf src/.git src/.github || true
           find src -type f \( -name "*.md" -o -name ".gitignore" \) -print0 | xargs -0 -r rm -f
+
+      - name: Print directory tree
+        if: runner.os != 'Windows'
+        run: |
+          if command -v tree &> /dev/null; then
+            tree -L 3
+          else
+            find . -maxdepth 3 -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'
+          fi
 
       - uses: oven-sh/setup-bun@v2.1.2
 
