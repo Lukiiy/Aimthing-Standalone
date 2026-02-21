@@ -11,8 +11,8 @@
     "windows": [
       {
         "title": "Aimthing",
-        "width": 800,
-        "height": 800,
+        "width": 1280,
+        "height": 720,
         "resizable": true
       }
     ],
@@ -23,6 +23,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "linux": {
+    	"appimage": {
+    		"bundleMediaFramework": true
+    	}
+    },
     "icon": [
       "icons/32.png",
       "icons/32.icns",
