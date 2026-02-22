@@ -75,6 +75,32 @@ jobs:
           bun tauri build --target ${{ matrix.rust_target }}
         shell: bash
 
+      - name: Patch AppImage
+        if: ${{ matrix.platform == 'ubuntu-22.04' }}
+        run: |
+          set -euxo pipefail
+
+          APPIMAGE=$(find src-tauri/target -type f -name "*.AppImage" | head -n1)
+          if [ -z "$APPIMAGE" ]; then
+            echo "No AppImage"
+            exit 1
+          fi
+
+          chmod +x "$APPIMAGE"
+          "$APPIMAGE" --appimage-extract
+          cd squashfs-root
+
+          rm -f usr/lib/*/libwayland-client* usr/lib/*/libwayland-egl* usr/lib/*/libEGL* usr/lib/*/libGL* usr/lib/*/libGLES* usr/lib/*/libgbm* usr/lib/*/libdrm* || true
+          find usr/lib -type f \( -name 'libwayland*' -o -name 'libEGL*' -o -name 'libGL*' -o -name 'libGLES*' -o -name 'libgbm*' -o -name 'libdrm*' \) || true
+
+          cd ..
+
+          appimagetool squashfs-root aimthing-fixed.AppImage
+
+          mkdir -p release
+          mv aimthing-fixed.AppImage release/
+        shell: bash
+
       - name: Get executables
         if: ${{ runner.os != 'Windows' }}
         run: |
