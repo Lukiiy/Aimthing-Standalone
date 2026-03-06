@@ -67,16 +67,7 @@ jobs:
         if: ${{ matrix.platform == 'ubuntu-22.04' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libgtk-3-dev \
-            "libwebkit2gtk-4.1-dev=2.44.3-1~jammy1" \
-            "libjavascriptcoregtk-4.1-dev=2.44.3-1~jammy1" \
-            "libwebkit2gtk-4.1-0=2.44.3-1~jammy1" \
-            libsoup-3.0-dev \
-            librsvg2-dev \
-            libappindicator3-dev \
-            patchelf
-          sudo apt-mark hold libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libwebkit2gtk-4.1-0
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev libappindicator3-dev patchelf
 
       - name: Build
         run: |
@@ -87,27 +78,25 @@ jobs:
       - name: Patch AppImage
         if: ${{ matrix.platform == 'ubuntu-22.04' }}
         run: |
-          set -euxo pipefail
+          APPIMAGE=$(find src/src-tauri/target -type f -name "*.AppImage" | head -n1)
 
-          APPIMAGE=$(find src-tauri/target -type f -name "*.AppImage" | head -n1)
           if [ -z "$APPIMAGE" ]; then
-            echo "No AppImage"
+            echo "No AppImage found"
             exit 1
           fi
 
           chmod +x "$APPIMAGE"
           "$APPIMAGE" --appimage-extract
-          cd squashfs-root
 
-          rm -f usr/lib/*/libwayland-client* usr/lib/*/libwayland-egl* usr/lib/*/libEGL* usr/lib/*/libGL* usr/lib/*/libGLES* usr/lib/*/libgbm* usr/lib/*/libdrm* || true
-          find usr/lib -type f \( -name 'libwayland*' -o -name 'libEGL*' -o -name 'libGL*' -o -name 'libGLES*' -o -name 'libgbm*' -o -name 'libdrm*' \) || true
+          find squashfs-root -type f \( -name 'libwayland*' -o -name 'libEGL*' -o -name 'libGL*' -o -name 'libGLES*' -o -name 'libgbm*' -o -name 'libdrm*' \) -delete
 
-          cd ..
-
-          appimagetool squashfs-root aimthing-fixed.AppImage
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+          chmod +x appimagetool
+          ARCH=x86_64 ./appimagetool squashfs-root aimthing-fixed.AppImage
 
           mkdir -p release
           mv aimthing-fixed.AppImage release/
+          rm -rf squashfs-root appimagetool
         shell: bash
 
       - name: Get executables
