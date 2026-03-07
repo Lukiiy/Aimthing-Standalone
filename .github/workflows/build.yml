@@ -78,7 +78,7 @@ jobs:
       - name: Patch AppImage
         if: ${{ matrix.platform == 'ubuntu-22.04' }}
         run: |
-          APPIMAGE=$(find src/src-tauri/target -type f -name "*.AppImage" | head -n1)
+          APPIMAGE=$(find src-tauri/target -type f -name "*.AppImage" | head -n1)
 
           if [ -z "$APPIMAGE" ]; then
             echo "No AppImage found"
