@@ -39,7 +39,6 @@ jobs:
           repository: Lukiiy/Aimthing
           ref: main
           path: src
-          fetch-depth: 1
 
       - name: Cleanup
         run: |
@@ -68,13 +67,39 @@ jobs:
         if: ${{ matrix.platform == 'ubuntu-22.04' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev libappindicator3-dev patchelf
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev libappindicator3-dev patchelf libfuse2
 
       - name: Build
-        working-directory: src
         run: |
           bun install --frozen-lockfile
           bun tauri build --target ${{ matrix.rust_target }}
+        shell: bash
+
+      - name: Patch AppImage
+        if: ${{ matrix.platform == 'ubuntu-22.04' }}
+        run: |
+          APPIMAGE=$(find src-tauri/target -type f -name "*.AppImage" | head -n1)
+
+          if [ -z "$APPIMAGE" ]; then
+            echo "No AppImage found"
+            exit 1
+          fi
+
+          APPIMAGE_NAME=$(basename "$APPIMAGE")
+
+          chmod +x "$APPIMAGE"
+          "$APPIMAGE" --appimage-extract
+
+          find squashfs-root -type f \( -name 'libwayland*' -o -name 'libEGL*' -o -name 'libGL*' -o -name 'libGLES*' -o -name 'libgbm*' -o -name 'libdrm*' \) -delete
+
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+          chmod +x appimagetool
+          ARCH=x86_64 ./appimagetool squashfs-root "$APPIMAGE_NAME"
+          rm -f "$APPIMAGE"
+
+          mkdir -p release
+          mv "$APPIMAGE_NAME" release/
+          rm -rf squashfs-root appimagetool
         shell: bash
 
       - name: Get executables
@@ -85,10 +110,7 @@ jobs:
           find ./src-tauri/target -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.dmg" -o -name "*.rpm" \) -exec cp {} release/ \; || true
 
           if [ "${{ matrix.platform }}" = "ubuntu-22.04" ]; then
-            PKG_NAME=$(grep -m1 '^name = ' src-tauri/Cargo.toml | cut -d'"' -f2)
-            if [ -f "src-tauri/target/release/$PKG_NAME" ]; then
-              cp "src-tauri/target/release/$PKG_NAME" "release/${PKG_NAME}-minimal"
-            fi
+            find ./src-tauri/target -type f \( -name "aimthing" \) -exec cp {} release/aimthing-minimal \; || true
           fi
 
           ls -lh release/ || true
