@@ -45,21 +45,23 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            ~/src-tauri/target
+            src-tauri/target
           key: android-${{ hashFiles('src-tauri/Cargo.lock') }}
 
       - run: bun install --frozen-lockfile
+
+      - run: bun tauri android init --ci
 
       - name: Android signature
         run: |
           cd src-tauri/gen/android
           echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}" > keystore.properties
           echo "password=${{ secrets.ANDROID_KEY_PASSWORD }}" >> keystore.properties
-          base64 -d <<< "${{ secrets.ANDROID_KEY_BASE64 }}" > $RUNNER_TEMP/keystore.jks
+          echo "${{ secrets.ANDROID_KEY_BASE64 }}" | base64 -d > $RUNNER_TEMP/keystore.jks
           echo "storeFile=$RUNNER_TEMP/keystore.jks" >> keystore.properties
 
       - name: Build Tauri Android
-        run: bun tauri android build --apk --split-per-abi --target ${{ matrix.rust_target }}
+        run: bun tauri android build --apk --split-per-abi
 
       - name: Collect artifacts
         run: |
@@ -72,5 +74,4 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.artifact_prefix }}
           path: release/*
