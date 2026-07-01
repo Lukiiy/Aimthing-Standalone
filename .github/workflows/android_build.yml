@@ -7,19 +7,6 @@ jobs:
   build-android:
     runs-on: ubuntu-22.04
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - rust_target: aarch64-linux-android
-            artifact_prefix: android-aarch64
-          - rust_target: armv7-linux-androideabi
-            artifact_prefix: android-armv7
-          - rust_target: i686-linux-android
-            artifact_prefix: android-i686
-          - rust_target: x86_64-linux-android
-            artifact_prefix: android-x86_64
-
     steps:
       - uses: actions/checkout@v7
 
@@ -31,17 +18,17 @@ jobs:
 
       - name: Setup Android SDK/NDK
         uses: android-actions/setup-android@v4.0.1
-        with:
-          packages: |
-            platforms;android-24
-            build-tools;34.0.0
-            platform-tools
-            ndk;27.3.13750724
+
+      - name: Install Android packages
+        run: |
+          yes | sdkmanager --licenses
+
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.rust_target }}
+          targets: aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
 
       - name: Cache Rust
         uses: actions/cache@v6.1.0
@@ -50,9 +37,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            src/src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ matrix.rust_target }}-${{ hashFiles('src/src-tauri/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-${{ matrix.rust_target }}-
+            ~/src-tauri/target
+          key: android-${{ hashFiles('src-tauri/Cargo.lock') }}
 
       - run: bun install --frozen-lockfile
 
@@ -65,7 +51,15 @@ jobs:
           echo "storeFile=$RUNNER_TEMP/keystore.jks" >> keystore.properties
 
       - name: Build Tauri Android
-        run: bun tauri android build -- --target ${{ matrix.rust_target }}
+        run: bun tauri android build --apk --split-per-abi --target ${{ matrix.rust_target }}
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p release
+
+          find src-tauri/gen/android/app/build/outputs -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} release/ \;
+
+          ls -lah release
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
