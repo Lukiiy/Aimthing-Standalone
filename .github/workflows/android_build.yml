@@ -65,11 +65,13 @@ jobs:
 
       - name: Sign APKs
         run: |
+          APKSIGNER="$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner"
+
           echo "${{ secrets.ANDROID_KEY_BASE64 }}" | base64 -d > "$RUNNER_TEMP/keystore.jks"
 
           for apk in release/*.apk
           do
-            apksigner sign --ks $RUNNER_TEMP/keystore.jks --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} --ks-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" "$apk"
+            "$APKSIGNER" sign --ks $RUNNER_TEMP/keystore.jks --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} --ks-key-alias "${{ secrets.ANDROID_KEY_ALIAS }}" "$apk"
           done
 
       - name: Upload artifacts
