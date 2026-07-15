@@ -1,5 +1,6 @@
 use tauri_plugin_opener::OpenerExt;
 
+/// Opens an external URL with the default browser.
 #[tauri::command]
 fn open_external(app: tauri::AppHandle, url: String) -> Result<(), String> {
     app.opener().open_url(url, None::<String>).map_err(|e| e.to_string())
